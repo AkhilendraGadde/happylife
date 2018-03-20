@@ -1,11 +1,15 @@
 package com.tssquad.apps.happylife;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.TransitionDrawable;
 import android.support.annotation.NonNull;
+import android.support.design.widget.BottomSheetBehavior;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.CardView;
@@ -14,11 +18,14 @@ import android.support.v7.widget.LinearSnapHelper;
 import android.support.v7.widget.PagerSnapHelper;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SnapHelper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,6 +36,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -38,13 +46,30 @@ public class MainActivity extends AppCompatActivity {
     ViewAdapter mAdapter;
     RecyclerView recyclerView;
     List<String> quoteString;
+    private BottomSheetBehavior mBottomSheetBehavior;
+    private FloatingActionButton fab;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        View postReplySheet = findViewById(R.id.sheet);
+        mBottomSheetBehavior = BottomSheetBehavior.from(postReplySheet);
+        mBottomSheetBehavior.setHideable(true);
+        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        mBottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if (newState == BottomSheetBehavior.STATE_DRAGGING) {
+                    mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                }
+            }
 
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+            }
+        });
         recyclerView = findViewById(R.id.quotesView);
 
         recyclerView.setHasFixedSize(true);
@@ -53,6 +78,16 @@ public class MainActivity extends AppCompatActivity {
 
         SnapHelper snapHelper = new PagerSnapHelper();
         snapHelper.attachToRecyclerView(recyclerView);
+
+        fab =  findViewById(R.id.add_fab);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                quotePost();
+            }
+        });
+
+
 
         mAdapter = new ViewAdapter();
         try {
@@ -76,14 +111,57 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    private void quotePost() {
+
+        final EditText editText = findViewById(R.id.post);
+
+        final DatabaseHelper helper = new DatabaseHelper(getApplicationContext());
+
+
+        findViewById(R.id.btn_post).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+
+                if (!TextUtils.isEmpty(editText.getText().toString()))  {
+
+                    helper.insertTo(helper,editText.getText().toString());
+
+
+                    try {
+                        quoteString.addAll(0,helper.readAll(helper));
+                    } catch (Exception E)   {
+                        E.getMessage();
+                    }
+                    mAdapter.removeAll();
+                    mAdapter.addAll(quoteString);
+
+                    mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                    fab.show();
+
+                    editText.setText("");
+
+                }
+            }
+        });
+
+
+
+        if(mBottomSheetBehavior.getState() != BottomSheetBehavior.STATE_EXPANDED) {
+            mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            fab.hide();
+        }
+        else {
+            mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            fab.show();
+        }
+
+    }
+
     private void getQuotes() throws IOException, JSONException {
 
 
         quoteString = new ArrayList<>();
-
-
-        //quoteString.add("People try to say suicide is the most cowardly act a man could ever commit. I don’t think that’s true at all. What’s cowardly is treating a man so badly that he wants to commit suicide.");
-
 
         StringBuilder buf = new StringBuilder();
         InputStream json = getAssets().open("quotes.json");
@@ -104,6 +182,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Collections.shuffle(quoteString);
+
+        final DatabaseHelper helper = new DatabaseHelper(getApplicationContext());
+
+        try {
+            quoteString.addAll(0,helper.readAll(helper));
+        } catch (Exception E)   {
+            E.getMessage();
+        }
+
+
         mAdapter.addAll(quoteString);
         recyclerView.setAdapter(mAdapter);
 
@@ -187,5 +275,15 @@ public class MainActivity extends AppCompatActivity {
             //textView.setText(" \" "+  s + " \"");
             textView.setText(s);
         }
+    }
+
+
+    @Override
+    public void onBackPressed() {
+
+        if(mBottomSheetBehavior.getState() == BottomSheetBehavior.STATE_EXPANDED) {
+            mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            fab.show();
+        } else super.onBackPressed();
     }
 }
